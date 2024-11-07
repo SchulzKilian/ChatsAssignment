@@ -34,4 +34,5 @@ Soft deletion of messages (like on whatsapp "This message has been deleted")
 Image url to get images properly
 I bet there are some bugs
 Password forgotten flow
+Protection against malicious API use
 
