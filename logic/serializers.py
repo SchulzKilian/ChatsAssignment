@@ -3,12 +3,17 @@ from rest_framework import serializers
 from .models import User, Chat, Message
 
 class UserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=True)
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'avatar', 'bio']
+        fields = ['id', 'username', 'email', 'avatar', 'bio', 'password']
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
+        if 'password' not in validated_data:
+            raise serializers.ValidationError({
+                'password': 'Password is required'
+            })
         user = User.objects.create_user(**validated_data)
         return user
 
