@@ -6,6 +6,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .serializers import UserSerializer, ChatSerializer, MessageSerializer
 from .models import User, Chat, Message
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+from rest_framework_simplejwt.tokens import RefreshToken
+
 
 class SessionView(views.APIView):
     """Handles authentication"""
@@ -18,8 +21,26 @@ class SessionView(views.APIView):
         permission_classes = [IsAuthenticated]
         
         def post(self, request):
-            # Blacklist the token if using JWT blacklist
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            try:
+                # Get the refresh token from request
+                refresh_token = request.data.get('refresh')
+                if refresh_token:
+                    # Blacklist the specific token
+                    token = RefreshToken(refresh_token)
+                    token.blacklist()
+                    
+                    # Optional: Blacklist all user's tokens for complete logout
+                    user = request.user
+                    tokens = OutstandingToken.objects.filter(user_id=user.id)
+                    for token in tokens:
+                        BlacklistedToken.objects.get_or_create(token=token)
+                    
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            except Exception as e:
+                return Response(
+                    {'error': str(e)}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
 class UserView(viewsets.ModelViewSet):
     """Handles user operations"""
@@ -37,6 +58,10 @@ class UserView(viewsets.ModelViewSet):
     @action(detail=False, methods=['delete'])
     def delete_account(self, request):
         user = request.user
+        # Blacklist all tokens for this user
+        tokens = OutstandingToken.objects.filter(user_id=user.id)
+        for token in tokens:
+            BlacklistedToken.objects.get_or_create(token=token)
         user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
