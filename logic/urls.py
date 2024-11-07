@@ -16,7 +16,21 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from .views import SessionView, UserView, ChatView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # Session URLs
+    path('login/', SessionView.Login.as_view(), name='login'),
+    path('logout/', SessionView.Logout.as_view(), name='logout'),
+    
+    # User URLs
+    path('register/', UserView.as_view(), kwargs={'action': 'register'}, name='register'),
+    path('delete-account/', UserView.as_view(), kwargs={'action': 'delete'}, name='delete-account'),
+    
+    # Chat URLs
+    path('chats/', ChatView.as_view(), name='chat-list'),
+    path('chat/<uuid:chat_id>/', ChatView.as_view(), name='chat-detail'),
+    path('message/send/', ChatView.as_view(), name='send-message'),
 ]
