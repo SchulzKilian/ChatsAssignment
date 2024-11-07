@@ -38,6 +38,7 @@ class Chat(models.Model):
     """
     Chat model to represent a conversation between users
     """
+    
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='chats')
     created_at = models.DateTimeField(auto_now_add=True)
