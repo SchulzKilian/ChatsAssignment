@@ -1,106 +1,96 @@
 # views.py
-from django.views.generic import ListView, DetailView, View
-from django.contrib.auth.views import LoginView, LogoutView
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.urls import reverse_lazy
-from django.http import JsonResponse
-from django.shortcuts import redirect, get_object_or_404
+from rest_framework import viewsets, status, views
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from .serializers import UserSerializer, ChatSerializer, MessageSerializer
 from .models import User, Chat, Message
-from .forms import UserRegistrationForm
 
-class SessionView(View):
-    """Handles all session-related views"""
-    
-    class Login(LoginView):
-        template_name = 'login.html'
-        success_url = reverse_lazy('chat-list')
-        redirect_authenticated_user = True
+class SessionView(views.APIView):
+    """Handles authentication"""
+    permission_classes = [AllowAny]
 
-    class Logout(LoginRequiredMixin, LogoutView):
-        next_page = reverse_lazy('login')
+    class Login(TokenObtainPairView):
+        pass
 
-class UserView(View):
-    """Handles all user-related views"""
-    
-    def get(self, request, *args, **kwargs):
-        """Handle GET request - show registration form"""
-        return render(request, 'register.html', {'form': UserRegistrationForm()})
-
-    def post(self, request, *args, **kwargs):
-        """Handle POST request - process registration or deletion"""
-        action = kwargs.get('action')
+    class Logout(views.APIView):
+        permission_classes = [IsAuthenticated]
         
-        if action == 'register':
-            return self.register(request)
-        elif action == 'delete':
-            return self.delete_account(request)
-    
-    def register(self, request):
-        form = UserRegistrationForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            login(request, user)
-            return redirect('chat-list')
-        return render(request, 'register.html', {'form': form})
+        def post(self, request):
+            # Blacklist the token if using JWT blacklist
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @method_decorator(login_required)
+class UserView(viewsets.ModelViewSet):
+    """Handles user operations"""
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_permissions(self):
+        if self.action == 'create':  # registration
+            return [AllowAny()]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        return User.objects.all()
+
+    @action(detail=False, methods=['delete'])
     def delete_account(self, request):
-        request.user.delete()
-        return redirect('login')
+        user = request.user
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-class ChatView(LoginRequiredMixin, View):
-    """Handles all chat-related views"""
+    def create(self, request, *args, **kwargs):
+        """Handle registration"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response(
+            UserSerializer(user).data,
+            status=status.HTTP_201_CREATED
+        )
 
-    def get(self, request, *args, **kwargs):
-        """Handle GET requests for chat list and detail views"""
-        chat_id = kwargs.get('chat_id')
+class ChatView(viewsets.ModelViewSet):
+    """Handles chat operations"""
+    serializer_class = ChatSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Chat.objects.filter(participants=self.request.user)
+
+    def retrieve(self, request, pk=None):
+        """Get specific chat with messages"""
+        chat = self.get_object()
+        serializer = self.get_serializer(chat, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def send_message(self, request, pk=None):
+        """Send a message in a specific chat"""
+        chat = self.get_object()
+        serializer = MessageSerializer(data=request.data)
         
-        if chat_id:
-            return self.chat_detail(request, chat_id)
-        return self.chat_list(request)
-
-    def post(self, request, *args, **kwargs):
-        """Handle POST requests for sending messages"""
-        return self.send_message(request)
-
-    def chat_list(self, request):
-        """Show list of all chats"""
-        chats = request.user.get_all_chats()
-        return render(request, 'chat_list.html', {'chats': chats})
-
-    def chat_detail(self, request, chat_id):
-        """Show detail of specific chat"""
-        chat = get_object_or_404(Chat, id=chat_id, participants=request.user)
-        context = {
-            'chat': chat,
-            'messages': chat.get_chat_messages(),
-            'other_user': chat.get_other_participant(request.user)
-        }
-        return render(request, 'chat_detail.html', context)
-
-    def send_message(self, request):
-        """Handle message sending"""
-        recipient_id = request.POST.get('recipient_id')
-        content = request.POST.get('content')
-        content_type = request.POST.get('content_type', 'text')
-        media = request.FILES.get('media', None)
-
-        try:
-            recipient = User.objects.get(id=recipient_id)
-            message = Message.send_message(
+        if serializer.is_valid():
+            message = serializer.save(
                 sender=request.user,
-                recipient=recipient,
-                content=content,
-                content_type=content_type,
-                media=media
+                chat=chat
             )
-            return JsonResponse({
-                'status': 'success',
-                'message_id': str(message.id),
-                'timestamp': message.timestamp.isoformat()
-            })
-        except User.DoesNotExist:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Recipient not found'
-            }, status=404)
+            return Response(
+                MessageSerializer(message).data,
+                status=status.HTTP_201_CREATED
+            )
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    @action(detail=False, methods=['get'])
+    def list_chats(self, request):
+        """Get all chats for current user"""
+        chats = request.user.get_all_chats()
+        serializer = self.get_serializer(
+            chats, 
+            many=True,
+            context={'request': request}
+        )
+        return Response(serializer.data)

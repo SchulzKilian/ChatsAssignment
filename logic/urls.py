@@ -14,23 +14,26 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.contrib import admin
-from django.urls import path
+# urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .views import SessionView, UserView, ChatView
 
-urlpatterns = [
-    path('admin/', admin.site.urls),
+router = DefaultRouter()
+router.register(r'users', UserView, basename='user')
+router.register(r'chats', ChatView, basename='chat')
 
-    # Session URLs
-    path('login/', SessionView.Login.as_view(), name='login'),
-    path('logout/', SessionView.Logout.as_view(), name='logout'),
+urlpatterns = [
+    path('', include(router.urls)),
+    # Session endpoints
+    path('auth/login/', SessionView.Login.as_view(), name='login'),
+    path('auth/logout/', SessionView.Logout.as_view(), name='logout'),
     
-    # User URLs
-    path('register/', UserView.as_view(), kwargs={'action': 'register'}, name='register'),
-    path('delete-account/', UserView.as_view(), kwargs={'action': 'delete'}, name='delete-account'),
-    
-    # Chat URLs
-    path('chats/', ChatView.as_view(), name='chat-list'),
-    path('chat/<uuid:chat_id>/', ChatView.as_view(), name='chat-detail'),
-    path('message/send/', ChatView.as_view(), name='send-message'),
+    # For ViewSets, we need to specify the actions
+    path('register/', UserView.as_view({
+        'post': 'create'
+    }), name='register'),
+    path('delete-account/', UserView.as_view({
+        'delete': 'delete_account'
+    }), name='delete-account'),
 ]
