@@ -26,18 +26,19 @@ class MessageSerializer(serializers.ModelSerializer):
 
 class ChatSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
-    other_participant = serializers.SerializerMethodField()
+    other_participants = serializers.SerializerMethodField()
     messages = MessageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Chat
         fields = ['id', 'participants', 'last_message', 
-                 'other_participant', 'messages', 'created_at']
+                 'other_participants', 'messages', 'created_at']
 
     def get_last_message(self, obj):
         return MessageSerializer(obj.get_last_message()).data
-
-    def get_other_participant(self, obj):
-        user = self.context['request'].user
-        other_user = obj.get_other_participant(user)
-        return UserSerializer(other_user).data
+    
+    def get_other_participants(self, obj):
+        current_user = self.context['request'].user
+        # Get all participants except the current user
+        other_participants = obj.get_other_participants(current_user)
+        return UserSerializer(other_participants, many=True).data

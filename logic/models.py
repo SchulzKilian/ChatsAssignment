@@ -53,9 +53,9 @@ class Chat(models.Model):
         """Returns the most recent message in the chat"""
         return self.messages.order_by('-timestamp').first()
 
-    def get_other_participant(self, user):
+    def get_other_participants(self, user):
         """Returns the other participant in a two-person chat"""
-        return self.participants.exclude(id=user.id).first()
+        return self.participants.exclude(id=user.id)
 
     class Meta:
         ordering = ['-updated_at']
