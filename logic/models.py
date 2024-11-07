@@ -38,17 +38,24 @@ class Chat(models.Model):
     """
     Chat model to represent a conversation between users
     """
-    
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='chats')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def get_chat_messages(self, page_size=50, page=1):
-        """Returns paginated messages for this chat"""
-        return self.messages.all().order_by(
-            '-timestamp'
-        )[(page-1)*page_size:page*page_size]
+    def get_chat_messages(self, user, page_size=50, page=1):
+        """Returns paginated messages for this chat and marks them as read"""
+        messages = self.messages.all().order_by('-timestamp')
+        
+        # Mark unread messages as read
+        messages.filter(
+            is_read=False
+        ).exclude(
+            sender=user
+        ).update(is_read=True)
+        
+        return messages[(page-1)*page_size:page*page_size]
 
     def get_last_message(self):
         """Returns the most recent message in the chat"""

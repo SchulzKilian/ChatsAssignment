@@ -81,13 +81,14 @@ class ChatView(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Chat.objects.filter(participants=self.request.user)
+        # Use the model method instead of direct filter
+        return self.request.user.get_all_chats()
 
     def retrieve(self, request, pk=None):
         """Get specific chat with messages"""
         try:
-            # Directly query the chat and check if user is participant
             chat = Chat.objects.get(id=pk)
+            # Use get_other_participants to check if user is participant
             if request.user not in chat.participants.all():
                 return Response(
                     {"detail": "You don't have permission to access this chat."},
@@ -108,9 +109,13 @@ class ChatView(viewsets.ModelViewSet):
         serializer = MessageSerializer(data=request.data)
         
         if serializer.is_valid():
-            message = serializer.save(
+            # Use Message.send_message class method
+            message = Message.send_message(
                 sender=request.user,
-                chat=chat
+                recipient=chat.get_other_participants(request.user).first(),
+                content=serializer.validated_data.get('text_content'),
+                content_type=serializer.validated_data.get('content_type', 'text'),
+                media=request.FILES.get('media_content')
             )
             return Response(
                 MessageSerializer(message).data,
@@ -121,6 +126,7 @@ class ChatView(viewsets.ModelViewSet):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # list_chats is already using the model method correctly
     @action(detail=False, methods=['get'])
     def list_chats(self, request):
         """Get all chats for current user"""

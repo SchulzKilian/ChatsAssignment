@@ -35,7 +35,7 @@ urlpatterns = [
     path('auth/logout/', SessionView.Logout.as_view(), name='logout'),
 ]
 
-# This will create the following URL patterns:
+
 
 # User endpoints:
 # POST /users/ - create user (register)
