@@ -36,3 +36,28 @@ I bet there are some bugs
 Password forgotten flow
 Protection against malicious API use
 
+
+
+
+User Endpoints:
+
+
+# User endpoints:
+# POST /users/ - create user (register)
+# GET /users/ - list users
+# GET /users/{id}/ - get specific user
+# PUT /users/{id}/ - update user
+# PATCH /users/{id}/ - partial update user
+# DELETE /users/delete_account/ - delete current user account 
+
+# Chat endpoints:
+# GET /chats/ - list all chats
+# POST /chats/ - create new chat
+# GET /chats/{id}/ - get specific chat with messages
+# DELETE /chats/{id}/ - delete chat
+# POST /chats/{id}/send_message/ - send message in specific chat 
+# GET /chats/list_chats/ - get all chats with last message 
+
+
+For testing the proper endpoints I have a postman workspace to go with the django project.
+
