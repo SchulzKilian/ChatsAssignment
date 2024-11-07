@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
+from django.db.models import Max, Q
 import uuid
 
 class User(AbstractUser):
@@ -11,6 +12,25 @@ class User(AbstractUser):
     bio = models.TextField(max_length=500, blank=True)
     last_seen = models.DateTimeField(auto_now=True)
     
+    def get_all_chats(self):
+        """Returns all chats for the user with last message and participant info"""
+        return Chat.objects.filter(
+            participants=self
+        ).annotate(
+            last_message_time=Max('messages__timestamp')
+        ).prefetch_related(
+            'participants', 
+            'messages'
+        ).order_by('-last_message_time')
+
+    def start_chat_with(self, other_user):
+        """Creates or returns existing chat with another user"""
+        chat = Chat.objects.filter(participants=self).filter(participants=other_user).first()
+        if not chat:
+            chat = Chat.objects.create()
+            chat.participants.add(self, other_user)
+        return chat
+
     class Meta:
         db_table = 'auth_user'
 
@@ -22,6 +42,20 @@ class Chat(models.Model):
     participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='chats')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def get_chat_messages(self, page_size=50, page=1):
+        """Returns paginated messages for this chat"""
+        return self.messages.all().order_by(
+            '-timestamp'
+        )[(page-1)*page_size:page*page_size]
+
+    def get_last_message(self):
+        """Returns the most recent message in the chat"""
+        return self.messages.order_by('-timestamp').first()
+
+    def get_other_participant(self, user):
+        """Returns the other participant in a two-person chat"""
+        return self.participants.exclude(id=user.id).first()
 
     class Meta:
         ordering = ['-updated_at']
@@ -47,6 +81,32 @@ class Message(models.Model):
     media_content = models.FileField(upload_to='chat_media/', blank=True, null=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
+
+
+    @classmethod
+    def send_message(cls, sender, recipient, content, content_type='text', media=None):
+        """Creates and sends a new message"""
+        # Get or create chat between sender and recipient
+        chat = sender.start_chat_with(recipient)
+        
+        # Create message
+        message = cls.objects.create(
+            chat=chat,
+            sender=sender,
+            content_type=content_type,
+            text_content=content if content_type == 'text' else None,
+            media_content=media if media else None
+        )
+        
+        # Update chat timestamp
+        chat.save()  # This updates the updated_at field
+        
+        return message
+
+    def mark_as_read(self):
+        """Marks message as read"""
+        self.is_read = True
+        self.save()
 
     class Meta:
         ordering = ['timestamp']
