@@ -85,9 +85,21 @@ class ChatView(viewsets.ModelViewSet):
 
     def retrieve(self, request, pk=None):
         """Get specific chat with messages"""
-        chat = self.get_object()
-        serializer = self.get_serializer(chat, context={'request': request})
-        return Response(serializer.data)
+        try:
+            # Directly query the chat and check if user is participant
+            chat = Chat.objects.get(id=pk)
+            if request.user not in chat.participants.all():
+                return Response(
+                    {"detail": "You don't have permission to access this chat."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            serializer = self.get_serializer(chat, context={'request': request})
+            return Response(serializer.data)
+        except Chat.DoesNotExist:
+            return Response(
+                {"detail": "Chat not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
     @action(detail=True, methods=['post'])
     def send_message(self, request, pk=None):
